@@ -37,7 +37,7 @@ Claude Code 或 Trae 用户把路径换为 `~/.claude/skills` 或 `~/.trae-cn/sk
 
 ## 提交后的本机监控
 
-`submit` 成功后自动启动独立的本机进程，默认每 3 分钟（180 秒）查询一次 Slurm；提交时可传 `--monitor-interval 30` 调整为 30 秒（允许 2–3600 秒）。异常发生后会在下一次查询时尝试发送 macOS/Linux 桌面通知，并把通知结果写入状态文件。查询失败会退避重试，最多每 5 分钟一次。监控不会在服务器登录节点运行。
+`submit` 成功后自动启动独立的本机进程，默认每 3 分钟（180 秒）查询一次 Slurm；提交时可传 `--monitor-interval 30` 调整为 30 秒（允许 2–3600 秒）。异常发生后会在下一次查询时尝试显示本机提醒：macOS 使用带详细文字的 Finder 对话框（60 秒后自动关闭），Linux 使用 `notify-send`。告警及提醒请求结果写入状态文件；`notification.requested` 不代表用户一定看到了提醒。查询失败会退避重试，最多每 5 分钟一次。监控不会在服务器登录节点运行。
 
 ```bash
 python3 ~/.codex/skills/cluster-slurm/scripts/monitor.py show --job-id 744848

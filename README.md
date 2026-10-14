@@ -1,6 +1,6 @@
 # XJTU_SCTS- 2136
 
-本项目提供 `cluster-slurm` 技能，供 Codex、Claude Code 和 Trae 查询 CPU 集群实时资源、规划 QoS、通过 `sbatch` 提交作业，并在提交者电脑上监控。监控默认每 3 分钟查询一次；异常会尝试发送本机系统通知。
+本项目提供 `cluster-slurm` 技能，供 Codex、Claude Code 和 Trae 查询 CPU 集群实时资源、规划 QoS、通过 `sbatch` 提交作业，并在提交者电脑上监控。监控默认每 3 分钟查询一次；异常会尝试在本机显示带作业信息的提醒。
 
 ## 安装
 

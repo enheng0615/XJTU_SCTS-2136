@@ -63,24 +63,42 @@ def normal_state(value):
 def notify(message):
     title = "Slurm 作业告警"
     if sys.platform == "darwin":
+        # On some macOS setups, `display notification` returns 0 but only opens
+        # an empty Script Editor window. A Finder dialog exposes the actual
+        # failure text, and a detached helper keeps the poller responsive.
         cmd = ["osascript", "-e", "on run argv", "-e",
-               "display notification (item 1 of argv) with title (item 2 of argv)",
-               "-e", "end run", message, title]
+               'tell application "Finder"', "-e", "activate", "-e",
+               'display dialog (item 1 of argv) with title (item 2 of argv) '
+               'buttons {"确定"} default button "确定" with icon caution giving up after 60',
+               "-e", "end tell", "-e", "end run", message, title]
+        try:
+            child = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
+            time.sleep(0.2)
+            if child.poll() not in (None, 0):
+                return {"method": "finder_dialog", "requested": False,
+                        "error": f"Finder 提醒进程退出码 {child.returncode}"}
+            return {"method": "finder_dialog", "requested": True, "error": None,
+                    "helper_pid": child.pid}
+        except OSError as exc:
+            return {"method": "finder_dialog", "requested": False, "error": str(exc)}
     elif sys.platform.startswith("linux"):
         cmd = ["notify-send", title, message]
     else:
-        return "当前系统不支持桌面通知"
+        return {"method": "none", "requested": False, "error": "当前系统不支持桌面通知"}
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        return None if result.returncode == 0 else (result.stderr.strip() or "系统通知命令失败")
+        error = None if result.returncode == 0 else (result.stderr.strip() or "系统通知命令失败")
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return str(exc)
+        error = str(exc)
+    return {"method": "notify-send", "requested": error is None, "error": error}
 
 
 def alert(data, message):
-    error = notify(message)
+    notification = notify(message)
     data.setdefault("alerts", []).append({"at_utc": now(), "message": message,
-                                            "delivered": error is None, "error": error})
+                                            "notification": notification})
     data["alerts"] = data["alerts"][-50:]
 
 
@@ -113,9 +131,10 @@ def poll(host, job_id, expected):
     else:
         phase = "ACCOUNTING_PENDING"
     nodes = sorted({x["nodes"] for x in task_rows if x["nodes"] not in ("", "None", "Unknown")})
+    failed_samples = [x for x in task_rows if x["state"] in TERMINAL and x["state"] != "COMPLETED"][:3]
     return {"phase": phase, "state_counts": counts, "accounted_tasks": len(task_rows),
             "expected_tasks": expected, "queue_tasks": len(queue_rows), "nodes": nodes,
-            "tasks": task_rows[:100], "queue": queue_rows[:100]}
+            "tasks": task_rows[:100], "failed_samples": failed_samples, "queue": queue_rows[:100]}
 
 
 def worker(args):
@@ -146,7 +165,13 @@ def worker(args):
             failures = 0
             bad = sum(count for state, count in data["state_counts"].items() if state in TERMINAL and state != "COMPLETED")
             if bad > data.get("alerted_failed_tasks", 0):
-                alert(data, f"作业 {args.job_id} 已有 {bad} 个任务异常结束；请查看监控状态。")
+                details = "; ".join(f"{x['id']}: {x['state']}，退出码 {x['exit_code']}，节点 {x['nodes']}"
+                                    for x in data["failed_samples"])
+                message = f"作业 {args.job_id} 有 {bad} 个任务异常结束。"
+                if details:
+                    message += "\n" + details
+                message += f"\n可在 AI 中查询作业 {args.job_id} 的详细状态。"
+                alert(data, message)
                 data["alerted_failed_tasks"] = bad
             abnormal_queue = sorted({normal_state(x[1]) for x in data["queue"] if len(x) >= 2
                                      and normal_state(x[1]) not in ("PENDING", "RUNNING", "CONFIGURING", "COMPLETING")})
