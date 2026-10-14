@@ -13,4 +13,4 @@ python3 <本技能目录>/scripts/cluster.py plan --kind threaded --tasks 1 --cp
 python3 <本技能目录>/scripts/cluster.py submit --kind threaded --tasks 1 --cpus-per-task 8 --nodes 1 --mem-gb 32 --time 02:00:00 --script /home/USER/work/job.sh --workdir /home/USER/work
 ```
 
-`--kind array` 还需 `--array-count N --max-parallel M`；CPU 和内存参数按**单个数组元素**填写。提交后报告 job ID、作业名、分区、QoS、资源、限制节点、工作目录、日志路径、监控状态文件和监控页面 URL。提交成功会自动启动本机独立轮询进程与汇总页面；详见 [monitoring.md](monitoring.md)。若返回 `monitor_error` 或 `dashboard_error`，作业仍可能已提交，必须保留 job ID 并报告错误。若 `sbatch` 响应超时，**不要直接重试**；先用 `cluster.py list` 按唯一作业名检查是否已提交。
+`--kind array` 还需 `--array-count N --max-parallel M`；CPU 和内存参数按**单个数组元素**填写。提交后报告 job ID、作业名、分区、QoS、资源、限制节点、工作目录、日志路径和独立监控状态文件；启用监控页面时再报告页面 URL。提交成功总会启动本机独立轮询进程；页面是否自动打开取决于本机开关，也可用 `--dashboard` 或 `--no-dashboard` 临时覆盖。轮询默认 180 秒，可在提交命令末尾加 `--monitor-interval 秒数`；详见 [monitoring.md](monitoring.md)。若返回 `monitor_error` 或 `dashboard_error`，作业仍可能已提交，必须保留 job ID 并报告错误。若 `sbatch` 响应超时，**不要直接重试**；先用 `cluster.py list` 按唯一作业名检查是否已提交。

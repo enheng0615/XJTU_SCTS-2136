@@ -37,17 +37,20 @@ Claude Code 或 Trae 用户把路径换为 `~/.claude/skills` 或 `~/.trae-cn/sk
 
 ## 提交后的本机监控
 
-`submit` 成功后为每个作业自动启动独立的本机轮询进程，并启动一个所有作业共用的本机监控页面。第一次提交时在默认浏览器打开；以后提交的普通作业和作业数组自动加入同一页面，不会重复创建窗口。`submit` 的 JSON 输出包含 `submission.dashboard.url`，支持浏览器侧栏的 Agent 可以在侧栏打开这个地址。页面每 3 秒读取本机状态文件；默认每 3 分钟（180 秒）才查询一次 Slurm。提交时可传 `--monitor-interval 30` 调整服务器查询为 30 秒（允许 2–3600 秒）。页面会显示作业阶段、数组完成数量、节点、上次查询时间、监控进程状态、失败原因和退出码。
+`submit` 成功后为每个作业自动启动独立的本机轮询进程；页面开关默认开启，会启动一个所有作业共用的本机监控页面。第一次提交时在默认浏览器打开；以后提交的普通作业和作业数组自动加入同一页面，不会重复创建窗口。启用页面时，`submit` 的 JSON 输出包含 `submission.dashboard.url`，支持浏览器侧栏的 Agent 可以在侧栏打开这个地址。页面每 3 秒读取本机状态文件；默认每 3 分钟（180 秒）才查询一次 Slurm。提交时可传 `--monitor-interval 30` 调整服务器查询为 30 秒（允许 2–3600 秒）；运行中的作业可用 `monitor.py interval --job-id ID --interval 30` 修改。页面会显示作业阶段、数组完成数量、节点、上次查询时间、监控进程状态、失败原因和退出码。
 
 异常发生后会在下一次查询时显示在页面上，并尝试本机提醒：macOS 使用带详细文字的 Finder 对话框（60 秒后自动关闭），Linux 使用 `notify-send`。告警及提醒请求结果写入状态文件；`notification.requested` 不代表用户一定看到了提醒。查询失败会退避重试，最多每 5 分钟一次。监控和页面服务都只在提交者电脑上运行，不占用服务器登录节点。
 
 ```bash
 python3 ~/.codex/skills/cluster-slurm/scripts/monitor.py show --job-id 123456
+python3 ~/.codex/skills/cluster-slurm/scripts/monitor.py interval --job-id 123456 --interval 60
 python3 ~/.codex/skills/cluster-slurm/scripts/monitor.py start --job-id 123456
 python3 ~/.codex/skills/cluster-slurm/scripts/monitor.py stop --job-id 123456
 python3 ~/.codex/skills/cluster-slurm/scripts/dashboard.py open
 python3 ~/.codex/skills/cluster-slurm/scripts/dashboard.py status
+python3 ~/.codex/skills/cluster-slurm/scripts/dashboard.py disable
+python3 ~/.codex/skills/cluster-slurm/scripts/dashboard.py enable
 python3 ~/.codex/skills/cluster-slurm/scripts/dashboard.py stop
 ```
 
-`monitor.py show` 查看本机记录，`start` 可在监控意外退出后重新附着，`stop` 只停止指定作业的本机轮询。`dashboard.py open` 重开页面，`status` 返回页面地址，`stop` 只关闭页面服务。这些命令都不会取消 Slurm 作业。作业完成后，页面仍显示历史记录。状态记录在 `~/.local/state/cluster-slurm/<主机>/<job-id>.json`，也可通过 `XDG_STATE_HOME` 修改位置。电脑睡眠、关机或断网时，进程无法及时发现异常；系统通知若被禁用，状态文件仍会保存检测结果。已结束的 AI 对话不会因桌面通知自动重新打开。
+`monitor.py show` 查看本机记录，`interval` 调整已有作业的轮询间隔，`start` 可在监控意外退出后重新附着，`stop` 只停止指定作业的本机轮询。`dashboard.py status` 返回 `dashboard_enabled`、`running` 与页面地址；`disable` 关闭以后提交时的自动页面并停止当前页面，`enable` 保存开启设置，`open` 立即手动打开页面但不更改开关，`stop` 只临时关闭页面服务。原有 `cluster.py submit` 命令末尾可加 `--dashboard` 或 `--no-dashboard` 临时覆盖；若共用页面已运行，`--no-dashboard` 仍会让作业出现在页面中。这些命令都不会取消 Slurm 作业，也不会因为关闭页面而停止独立监控进程。作业完成后，页面仍显示历史记录。状态记录在 `~/.local/state/cluster-slurm/<主机>/<job-id>.json`，也可通过 `XDG_STATE_HOME` 修改位置。页面开关保存在 `~/.config/cluster-slurm/preferences.json`，也可通过 `CLUSTER_SLURM_PREFERENCES` 指定位置。电脑睡眠、关机或断网时，进程无法及时发现异常；系统通知若被禁用，状态文件仍会保存检测结果。已结束的 AI 对话不会因桌面通知自动重新打开。

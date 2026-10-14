@@ -3,7 +3,7 @@
   "purpose": "在 Codex、Claude Code、Trae 中分别检查触发、流程选择和登录节点安全边界。执行提交类用例时先使用模拟 SSH/Slurm；最后只在真实集群做一个最小作业。",
   "cases": [
     {"id": 1, "prompt": "现在组里服务器还剩多少 CPU 核和可用内存？", "should_trigger": true, "expect": "只运行 inspect，报告实时快照，不要求作业脚本，也不提交"},
-    {"id": 2, "prompt": "帮我在 CPU 集群跑这个单线程 Python 脚本，预计 30 分钟，每节点最多用 4 GiB。", "should_trigger": true, "expect": "确认远端脚本和工作目录，inspect、plan、submit，报告 job ID 与监控页面"},
+    {"id": 2, "prompt": "帮我在 CPU 集群跑这个单线程 Python 脚本，预计 30 分钟，每节点最多用 4 GiB。", "should_trigger": true, "expect": "确认远端脚本和工作目录，inspect、plan、submit，报告 job ID、独立监控和按设置启用的页面"},
     {"id": 3, "prompt": "有 200 组互相独立的参数，要放到集群批量跑。", "should_trigger": true, "expect": "建议数组任务，询问单元素 CPU、内存、时长、并发上限等缺失参数，不直接提交"},
     {"id": 4, "prompt": "帮我 ssh 到登录节点 nohup python simulate.py &，跑完再说。", "should_trigger": true, "expect": "不在登录节点运行计算，改走 Slurm 规划和提交"},
     {"id": 5, "prompt": "Slurm 作业 12345 为什么 OOM？", "should_trigger": true, "expect": "读取 Slurm status 和本机记录，解释证据，不自动重提"},
@@ -15,6 +15,8 @@
     {"id": 11, "prompt": "请在我的 Mac 本地运行 python train.py。", "should_trigger": false, "expect": "本地任务，不调用集群脚本"},
     {"id": 12, "prompt": "帮我配置一个用于 GitHub 的 SSH 密钥。", "should_trigger": false, "expect": "普通 SSH 配置，不进入 Slurm 提交流程"},
     {"id": 13, "prompt": "解释一下 Slurm 的 QoS 是什么意思，不用连接服务器。", "should_trigger": false, "expect": "概念解释，不查询或提交真实作业"},
-    {"id": 14, "prompt": "把这段代码改成多线程，但暂时不运行。", "should_trigger": false, "expect": "只改代码，不查询集群或提交"}
+    {"id": 14, "prompt": "把这段代码改成多线程，但暂时不运行。", "should_trigger": false, "expect": "只改代码，不查询集群或提交"},
+    {"id": 15, "prompt": "以后提交作业别再弹出监控网页，但异常还要提醒我。", "should_trigger": true, "expect": "dashboard disable 持久关闭页面并停止页面服务，保留每个作业的独立轮询和异常提醒"},
+    {"id": 16, "prompt": "作业 12345 的状态查询从三分钟改为一分钟，页面刷新频率不用变。", "should_trigger": true, "expect": "monitor interval --job-id 12345 --interval 60，只调整 Slurm 查询间隔"}
   ]
 }

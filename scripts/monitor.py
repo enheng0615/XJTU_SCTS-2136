@@ -35,6 +35,29 @@ def paths(host, job_id):
     return base / f"{job_id}.json", base / f"{job_id}.log", base / f"{job_id}.stop"
 
 
+def interval_path(state_path):
+    return state_path.with_suffix(".interval")
+
+
+def read_interval(state_path, fallback):
+    try:
+        value = int(interval_path(state_path).read_text().strip())
+        return value if 2 <= value <= 3600 else fallback
+    except (OSError, ValueError):
+        return fallback
+
+
+def write_interval(state_path, seconds):
+    path = interval_path(state_path)
+    temporary = path.with_name(path.name + f".{os.getpid()}.tmp")
+    try:
+        temporary.write_text(f"{seconds}\n")
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def read_state(path):
     return json.loads(path.read_text()) if path.exists() else None
 
@@ -151,7 +174,7 @@ def worker(args):
     state_path, log_path, stop_path = paths(args.host, args.job_id)
     data = read_state(state_path) or {}
     data.update({"job_id": args.job_id, "host": args.host, "job_name": args.job_name,
-                 "expected_tasks": args.array_count, "interval_seconds": args.interval,
+                 "expected_tasks": args.array_count, "interval_seconds": read_interval(state_path, args.interval),
                  "monitor_pid": os.getpid()})
     previous = data.get("phase")
     failures = 0
@@ -195,11 +218,18 @@ def worker(args):
             data.setdefault("transitions", []).append({"at_utc": now(), "phase": data.get("phase")})
             data["transitions"] = data["transitions"][-100:]
             previous = data.get("phase")
+        data["interval_seconds"] = read_interval(state_path, args.interval)
         save_state(state_path, data)
         if data.get("phase") in ("COMPLETED", "FAILED") and "last_error" not in data:
             return
-        delay = min(300, args.interval * (2 ** min(failures, 3))) if failures else args.interval
-        time.sleep(delay)
+        checked_at = time.monotonic()
+        while not stop_path.exists():
+            interval = read_interval(state_path, args.interval)
+            delay = min(300, interval * (2 ** min(failures, 3))) if failures else interval
+            remaining = delay - (time.monotonic() - checked_at)
+            if remaining <= 0:
+                break
+            time.sleep(min(3, remaining))
 
 
 def start(args):
@@ -217,6 +247,7 @@ def start(args):
                     "interval_seconds": args.interval})
     initial.setdefault("submitted_at_utc", now())
     initial.setdefault("transitions", [])
+    write_interval(state_path, args.interval)
     save_state(state_path, initial)
     cmd = [sys.executable, str(Path(__file__).resolve()), "run", "--host", args.host,
            "--job-id", args.job_id, "--job-name", args.job_name,
@@ -242,7 +273,7 @@ def start(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["start", "run", "show", "stop"])
+    parser.add_argument("action", choices=["start", "run", "show", "stop", "interval"])
     parser.add_argument("--host", help="内部调用使用；默认读取本机集群配置")
     parser.add_argument("--job-id", required=True)
     parser.add_argument("--job-name", default="")
@@ -257,6 +288,8 @@ def main():
             parser.error(str(exc))
     if not re.fullmatch(r"\d+", args.job_id) or (args.array_count is not None and args.array_count < 1) or (args.interval is not None and not 2 <= args.interval <= 3600):
         parser.error("job ID、数组元素数或轮询间隔无效")
+    if args.action == "interval" and args.interval is None:
+        parser.error("interval 需要 --interval 秒数")
     if args.action == "start":
         print(json.dumps(start(args), ensure_ascii=False, indent=2))
     elif args.action == "run":
@@ -269,7 +302,13 @@ def main():
         if args.action == "stop":
             stop_path.touch(mode=0o600)
             data["stop_requested"] = True
+        elif args.action == "interval":
+            write_interval(state_path, args.interval)
+            data["interval_seconds"] = args.interval
+            save_state(state_path, data)
         data["monitor_alive"] = alive(data.get("monitor_pid"))
+        if args.action == "interval":
+            data["interval_change_applies_now"] = data["monitor_alive"] and data.get("phase") not in ("COMPLETED", "FAILED", "MONITOR_STOPPED")
         print(json.dumps(data, ensure_ascii=False, indent=2))
 
 

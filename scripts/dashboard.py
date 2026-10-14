@@ -16,7 +16,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from config import load as load_config, target as ssh_target
+from config import load as load_config, load_dashboard_enabled, save_dashboard_enabled, target as ssh_target
 from monitor import alive, read_state, save_state, state_dir
 
 HTML = """<!doctype html>
@@ -190,11 +190,31 @@ def serve(host):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["start", "open", "status", "stop", "serve"])
+    parser.add_argument("action", choices=["enable", "disable", "start", "open", "status", "stop", "serve"])
     parser.add_argument("--host", help="内部调用使用；默认读取本机集群配置")
     parser.add_argument("--open-if-new", action="store_true", help="首次启动时打开浏览器；后续提交复用窗口")
     args = parser.parse_args()
     try:
+        if args.action == "enable":
+            save_dashboard_enabled(True)
+            print(json.dumps({"dashboard_enabled": True, "preferences_saved": True,
+                              "next_submit_auto_opens": True}, ensure_ascii=False, indent=2))
+            return
+        if args.action == "disable":
+            save_dashboard_enabled(False)
+            try:
+                host = args.host or ssh_target(load_config())
+            except (RuntimeError, ValueError):
+                print(json.dumps({"dashboard_enabled": False, "preferences_saved": True,
+                                  "running": False, "job_monitors_unaffected": True}, ensure_ascii=False, indent=2))
+                return
+            info = current(host)
+            if info:
+                os.kill(info["pid"], signal.SIGTERM)
+            print(json.dumps({"dashboard_enabled": False, "preferences_saved": True,
+                              "stop_requested": bool(info), "job_monitors_unaffected": True}, ensure_ascii=False, indent=2))
+            return
+        enabled = load_dashboard_enabled()
         host = args.host or ssh_target(load_config())
         if args.action == "serve":
             serve(host)
@@ -212,6 +232,7 @@ def main():
                 os.kill(info["pid"], signal.SIGTERM)
                 result = {"stop_requested": True, "dashboard_pid": info["pid"],
                           "job_monitors_unaffected": True}
+        result["dashboard_enabled"] = enabled
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (OSError, RuntimeError, ValueError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)

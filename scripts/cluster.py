@@ -10,7 +10,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from config import load as load_config, save as save_config, target as ssh_target
+from config import load as load_config, load_dashboard_enabled, save as save_config, target as ssh_target
 
 SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "-o", "StrictHostKeyChecking=accept-new",
             "-o", "ControlMaster=auto", "-o", "ControlPersist=30",
@@ -273,16 +273,19 @@ def submit(host, args, p):
     except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
         # sbatch already accepted the job; report the ID even if local monitoring fails.
         submission["monitor_error"] = str(exc)
-    dashboard_cmd = [sys.executable, str(Path(__file__).with_name("dashboard.py")),
-                     "start", "--host", host, "--open-if-new"]
-    try:
-        dashboard = subprocess.run(dashboard_cmd, capture_output=True, text=True, timeout=10)
-        if dashboard.returncode:
-            submission["dashboard_error"] = dashboard.stderr.strip() or dashboard.stdout.strip()
-        else:
-            submission["dashboard"] = json.loads(dashboard.stdout)
-    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
-        submission["dashboard_error"] = str(exc)
+    show_dashboard = args.dashboard
+    submission["dashboard_auto_open"] = show_dashboard
+    if show_dashboard:
+        dashboard_cmd = [sys.executable, str(Path(__file__).with_name("dashboard.py")),
+                         "start", "--host", host, "--open-if-new"]
+        try:
+            dashboard = subprocess.run(dashboard_cmd, capture_output=True, text=True, timeout=10)
+            if dashboard.returncode:
+                submission["dashboard_error"] = dashboard.stderr.strip() or dashboard.stdout.strip()
+            else:
+                submission["dashboard"] = json.loads(dashboard.stdout)
+        except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+            submission["dashboard_error"] = str(exc)
     return submission
 
 
@@ -307,6 +310,10 @@ def main():
     parser.add_argument("--job-id", help="status 使用的 Slurm job ID")
     parser.add_argument("--job-name", help="作业名前缀；提交时自动附加唯一标识")
     parser.add_argument("--monitor-interval", type=int, default=180, help="本机监控轮询间隔，秒；默认 180（3 分钟）")
+    dashboard_group = parser.add_mutually_exclusive_group()
+    dashboard_group.add_argument("--dashboard", dest="dashboard", action="store_true", help="本次提交启动监控页面")
+    dashboard_group.add_argument("--no-dashboard", dest="dashboard", action="store_false", help="本次提交不启动监控页面")
+    parser.set_defaults(dashboard=None)
     args = parser.parse_args()
     try:
         if args.action == "configure":
@@ -341,6 +348,8 @@ def main():
             result = {"snapshot": snap, "plan": p}
             if args.action == "submit":
                 if not args.script or not args.workdir: raise ValueError("submit 需要 --script 与 --workdir")
+                if args.dashboard is None:
+                    args.dashboard = load_dashboard_enabled()
                 result["submission"] = submit(host, args, p)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (RuntimeError, ValueError, subprocess.TimeoutExpired) as e:

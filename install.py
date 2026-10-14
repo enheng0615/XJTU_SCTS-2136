@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent
 HOME = Path.home()
 DATA = HOME / ".local" / "share" / "cluster-slurm"
 SKILL_BACKUPS = DATA.parent / "cluster-slurm-backups"
+SKILL_IGNORE = shutil.ignore_patterns(".git", "install.py", "INSTALL.md", "README.md", "evals", "tests", "__pycache__", "*.pyc")
 TARGETS = {
     "codex": (HOME / ".codex" / "skills" / "cluster-slurm", HOME / ".codex" / "hooks.json", "Bash"),
     "claude": (HOME / ".claude" / "skills" / "cluster-slurm", HOME / ".claude" / "settings.json", "Bash"),
@@ -33,7 +34,7 @@ def copy_skill(dest, platform):
         SKILL_BACKUPS.mkdir(parents=True, exist_ok=True)
         archived = SKILL_BACKUPS / (platform + "-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
         dest.rename(archived)
-    shutil.copytree(ROOT, dest, ignore=shutil.ignore_patterns("install.py", "INSTALL.md", "README.md", "evals", "tests", "__pycache__", "*.pyc"))
+    shutil.copytree(ROOT, dest, ignore=SKILL_IGNORE)
 
 
 def main():
@@ -45,7 +46,7 @@ def main():
     if DATA.exists():
         archived = DATA.with_name(DATA.name + ".bak-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
         DATA.rename(archived)
-    shutil.copytree(ROOT, DATA, ignore=shutil.ignore_patterns("install.py", "INSTALL.md", "README.md", "evals", "tests", "__pycache__", "*.pyc"))
+    shutil.copytree(ROOT, DATA, ignore=SKILL_IGNORE)
     command = "python3 " + str(DATA / "hooks" / "guard.py")
     for platform, (skill, config, matcher) in selected.items():
         skill.parent.mkdir(parents=True, exist_ok=True)
