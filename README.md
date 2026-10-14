@@ -4,7 +4,7 @@
 
 ## 安装
 
-下载 Release 中的 `cluster-slurm.zip`，解压后在 `cluster-slurm` 目录运行：
+下载 Release 中的 **Source code (zip)**，解压后进入生成的 `cluster-slurm-*` 目录运行：
 
 ```bash
 python3 install.py --platform all
