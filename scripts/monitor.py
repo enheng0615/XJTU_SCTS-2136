@@ -22,11 +22,16 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def paths(host, job_id):
+def state_dir(host):
     safe_host = re.sub(r"[^A-Za-z0-9_.-]", "_", host)
     base = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "cluster-slurm" / safe_host
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(base, 0o700)
+    return base
+
+
+def paths(host, job_id):
+    base = state_dir(host)
     return base / f"{job_id}.json", base / f"{job_id}.log", base / f"{job_id}.stop"
 
 

@@ -33,7 +33,7 @@ def copy_skill(dest, platform):
         SKILL_BACKUPS.mkdir(parents=True, exist_ok=True)
         archived = SKILL_BACKUPS / (platform + "-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
         dest.rename(archived)
-    shutil.copytree(ROOT, dest, ignore=shutil.ignore_patterns("install.py", "INSTALL.md", "README.md", "__pycache__", "*.pyc"))
+    shutil.copytree(ROOT, dest, ignore=shutil.ignore_patterns("install.py", "INSTALL.md", "README.md", "evals", "tests", "__pycache__", "*.pyc"))
 
 
 def main():
@@ -45,7 +45,7 @@ def main():
     if DATA.exists():
         archived = DATA.with_name(DATA.name + ".bak-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
         DATA.rename(archived)
-    shutil.copytree(ROOT, DATA, ignore=shutil.ignore_patterns("install.py", "INSTALL.md", "README.md", "__pycache__", "*.pyc"))
+    shutil.copytree(ROOT, DATA, ignore=shutil.ignore_patterns("install.py", "INSTALL.md", "README.md", "evals", "tests", "__pycache__", "*.pyc"))
     command = "python3 " + str(DATA / "hooks" / "guard.py")
     for platform, (skill, config, matcher) in selected.items():
         skill.parent.mkdir(parents=True, exist_ok=True)

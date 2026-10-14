@@ -273,6 +273,16 @@ def submit(host, args, p):
     except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
         # sbatch already accepted the job; report the ID even if local monitoring fails.
         submission["monitor_error"] = str(exc)
+    dashboard_cmd = [sys.executable, str(Path(__file__).with_name("dashboard.py")),
+                     "start", "--host", host, "--open-if-new"]
+    try:
+        dashboard = subprocess.run(dashboard_cmd, capture_output=True, text=True, timeout=10)
+        if dashboard.returncode:
+            submission["dashboard_error"] = dashboard.stderr.strip() or dashboard.stdout.strip()
+        else:
+            submission["dashboard"] = json.loads(dashboard.stdout)
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        submission["dashboard_error"] = str(exc)
     return submission
 
 

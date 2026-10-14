@@ -1,32 +1,18 @@
 ---
 name: cluster-slurm
-description: 在配置的 CPU 集群通过 SSH/Slurm 查询实时资源、规划并提交计算任务。用户要求在集群运行、调试、批量提交或查询作业时使用；不要在登录/管理节点直接运行计算程序。
+description: 在已配置的 CPU Slurm 集群查询资源、规划、提交和监控计算作业。用户要在服务器集群跑程序、提交 sbatch 或数组作业、查看队列与剩余资源、排查作业失败时使用。
 ---
 
 # XJTU_SCTS- 2136 CPU 集群作业
 
-首次使用先运行 `python3 <本技能目录>/scripts/cluster.py configure --host HOST --ssh-user USER --login-hostname NAME`，将集群地址或 SSH 别名、个人集群 Linux 账号及登录节点 `hostname` 保存到本机 `~/.config/cluster-slurm/config.json`；这些信息不随技能发布。`NAME` 是远端 `hostname` 的输出，不一定与 `HOST` 相同；认证由用户本机 SSH 配置提供，不在技能里保存密码或私钥。配置后运行 `inspect` 验证连接与节点身份。服务器手册中的节点数量、分区和模块版本可能过时，必须查询实时配置。登录节点只用于编辑、传输、轻量编译、查询和提交；不要在这里运行 Python 计算、训练、仿真、数据处理或后台进程。
+登录节点只用于编辑、传输、轻量编译、查询和提交。不得在这里运行 Python 计算、训练、仿真、数据处理或后台计算进程；不得用 `nohup`、`screen`、`tmux` 或直接 SSH 绕过 Slurm。Hook 只能拦截部分直接 SSH 命令，不能替代服务器端权限控制。
 
-## 每次提交
+首次使用先在用户本机运行 `python3 <本技能目录>/scripts/cluster.py configure --host HOST --ssh-user USER --login-hostname NAME`，再运行 `inspect` 验证连接与登录节点身份。`NAME` 是远端 `hostname` 的输出。认证由用户本机 SSH 提供；不要在技能、聊天或仓库中保存密码和私钥。
 
-1. 先运行 `python3 <本技能目录>/scripts/cluster.py inspect`。向用户展示当前 CPU 节点数量、总核数、Slurm 空闲核数、可用内存、实际负载异常节点和可用 QoS；不要把 `sinfo` 中重复出现的分区节点相加。库存是瞬时快照。
-2. 确认任务类型（串行、线程、MPI、混合、独立数组）、总进程数、每进程线程数、节点数、**每节点**峰值内存、最长时间、远端脚本和工作目录。缺失峰值内存、时间或并行模型时向用户提问，不猜测。若程序已提供日志/历史结果，可先据此估算并明确说明估算依据。独立任务用数组并询问并发上限；用户关联多个 Slurm account 时询问计费账号，传入 `--account`。
-3. `python3 <本技能目录>/scripts/cluster.py plan --kind ... --tasks ... --cpus-per-task ... --nodes ... --mem-gb ... --time DD-HH:MM:SS`。脚本按**实时** QoS 上限选择最小能容纳任务的 CPU 分区，并检查节点当前 CPU、内存和实际负载。`plan` 只做只读查询。
-4. 在远端工作目录准备作业脚本。脚本以 `#!/bin/bash` 开头，只包含运行命令、必要的 `module load`/环境激活及显式输出路径；资源参数统一由 `cluster.py` 提交，脚本里不要写 `#SBATCH`。不要在登录节点直接试跑计算命令；需要调试时申请小型 Slurm 交互任务。大任务先以真实输入的小样本做独立 Slurm 作业。
-5. 紧接提交前重新运行 `submit`；它重新检查资源，并用命令行参数覆盖脚本中的资源指令，同时把作业限制在检查过的安全节点。仅当 `plan` 显示可立即容纳、远端脚本和工作目录存在时提交。默认不在资源不足时排队；用户明确接受排队可加 `--allow-queue`，但任务必须满足总容量与 QoS 限制。提交后报告 job ID、作业名、分区、QoS、资源、节点、工作目录、日志路径及本机监控状态文件。`submit` 成功后自动启动独立的本机监控进程，默认每 3 分钟查询 Slurm；用户可用 `--monitor-interval 秒数` 调整。监控记录排队、运行和终态，在检测到任务失败、取消、超时、OOM、异常队列状态或查询失败时发本机提醒，并把含状态、节点和退出码的告警写入状态文件。用 `monitor.py show --job-id ID` 读取记录，并用 `cluster.py status --job-id ID` 直接核对 Slurm。若监控启动失败，作业仍可能已提交，必须报告 job ID 和 `monitor_error`，可用 `monitor.py start --job-id ID` 补启。若 `sbatch` 响应超时，**不要直接重试**，先用 `cluster.py list` 按唯一作业名检查是否已提交，避免重复作业。
+## 按请求选择流程
 
-示例（数值仅作格式示范，实际资源需由用户需求确定）：
+- **查剩余资源或能否运行：**运行 `cluster.py inspect`，说明总核数、Slurm 空闲核数、安全可用内存、异常节点和可用 QoS。实时快照不是资源预留；不要把不同分区里重复出现的节点相加。只查询时不要求提交参数。
+- **规划或提交新作业：**阅读 [references/submission.md](references/submission.md)。先查资源，确认并行模型、每节点峰值内存和最长时间，运行 `plan`；只有用户要求运行且条件满足时才运行 `submit`。缺关键参数时提问，不猜测。不能在登录节点试跑计算程序。
+- **查询或监控已有作业：**用 `cluster.py status --job-id ID` 核对 Slurm；用 `monitor.py show --job-id ID` 查看本机记录。持续显示多个作业、重启监控或处理告警时阅读 [references/monitoring.md](references/monitoring.md)。查询状态不进入提交流程，也不自动重提失败作业。
 
-```bash
-python3 <本技能目录>/scripts/cluster.py inspect
-python3 <本技能目录>/scripts/cluster.py plan --kind threaded --tasks 1 --cpus-per-task 8 --nodes 1 --mem-gb 32 --time 02:00:00
-python3 <本技能目录>/scripts/cluster.py submit --kind threaded --tasks 1 --cpus-per-task 8 --nodes 1 --mem-gb 32 --time 02:00:00 --script /home/USER/work/job.sh --workdir /home/USER/work
-```
-
-`--kind array` 还需 `--array-count N --max-parallel M`，资源参数按**单个数组元素**填写。不得用 `nohup`、`screen`、`tmux`、`ssh LOGIN_NODE 'python ...'` 等方式绕过调度器。Hook 会拦截常见直接 SSH 执行，但无法替代服务器端权限控制。
-
-监控进程只在提交者的本机运行，不占用登录节点。状态保存在 `~/.local/state/cluster-slurm/<主机>/<job-id>.json`（或 `XDG_STATE_HOME` 下），含最近查询时间、状态变化、失败原因、提醒请求结果和数组完成情况。macOS 异常提醒使用带详细文字的 Finder 对话框，60 秒后自动关闭；Linux 使用 `notify-send`。状态中的 `notification.requested` 只说明已向本机桌面请求展示，不能证明用户已看到。`monitor.py stop --job-id ID` 仅停止本机监控，**不会取消 Slurm 作业**。本机关机、睡眠或网络中断时无法持续监控；恢复后可用 `monitor.py start --job-id ID` 重新附着，并以 Slurm 状态为准。跨 Codex、Claude Code、Trae 的后台进程不能保证向已结束的 AI 会话发消息。
-
-若 Agent 会话仍在等待作业结果，定期用 `monitor.py show --job-id ID` 检查状态并在发现异常时立即在会话内报告；长时作业在会话结束后由本机提醒用户。告警检测延迟最长约为配置的轮询间隔，SSH 查询失败时会退避，不能保证故障发生的同一瞬间送达。
-
-若脚本报告节点负载与 Slurm 分配明显不符、内存探测失败、作业无内存请求或配置不明，不要把该节点视为安全空闲；给出证据并请用户/管理员确认。
+脚本路径相对于本技能目录。服务器手册中的节点数量、分区及模块版本可能过时，资源与 QoS 均以实时查询为准。若节点负载与 Slurm 分配明显不符、内存探测失败或配置不明，停止将该节点视为安全空闲，并向用户报告证据。
