@@ -3,9 +3,9 @@ name: cluster-slurm
 description: 在配置的 CPU 集群通过 SSH/Slurm 查询实时资源、规划并提交计算任务。用户要求在集群运行、调试、批量提交或查询作业时使用；不要在登录/管理节点直接运行计算程序。
 ---
 
-# CPU 集群作业
+# XJTU_SCTS- 2136 CPU 集群作业
 
-首次使用先运行 `python3 <本技能目录>/scripts/cluster.py configure --host HOST --ssh-user USER --login-hostname NAME`，将集群地址或 SSH 别名、个人账号及登录节点 hostname 保存到本机 `~/.config/cluster-slurm/config.json`；这些信息不随技能发布。配置后运行 `inspect` 验证连接与节点身份。服务器手册中的节点数量、分区和模块版本可能过时，必须查询实时配置。登录节点只用于编辑、传输、轻量编译、查询和提交；不要在这里运行 Python 计算、训练、仿真、数据处理或后台进程。
+首次使用先运行 `python3 <本技能目录>/scripts/cluster.py configure --host HOST --ssh-user USER --login-hostname NAME`，将集群地址或 SSH 别名、个人集群 Linux 账号及登录节点 `hostname` 保存到本机 `~/.config/cluster-slurm/config.json`；这些信息不随技能发布。`NAME` 是远端 `hostname` 的输出，不一定与 `HOST` 相同；认证由用户本机 SSH 配置提供，不在技能里保存密码或私钥。配置后运行 `inspect` 验证连接与节点身份。服务器手册中的节点数量、分区和模块版本可能过时，必须查询实时配置。登录节点只用于编辑、传输、轻量编译、查询和提交；不要在这里运行 Python 计算、训练、仿真、数据处理或后台进程。
 
 ## 每次提交
 
